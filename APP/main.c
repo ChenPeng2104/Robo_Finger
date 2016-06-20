@@ -202,8 +202,8 @@ void Dynamixel_Set_Task(void*pvParameters)
         }
         Function_Select = 100;
         vTaskDelay(500);//Delay 10ms
-//		for(i=0;i<6;i++)
-//				ADC_ConvertedValueLocal[i] = ((float)ADC_ConvertedValue[i])/4096*3.3;
+		for(i=0;i<3;i++)
+				ADC_ConvertedValueLocal[i] = ((float)ADC_ConvertedValue[i])/4096*3.3;
 
     }
 //	vTaskDelete( NULL );
@@ -242,7 +242,7 @@ void BSP_Init(void)
 		USART2_Init(57600);
     LED_Configuration();
 //    RNG_Configuration();
-//   ADC_Configuration();
+		ADC_Configuration();
     Value_Reset();
     vTaskDelay(15000);
 }

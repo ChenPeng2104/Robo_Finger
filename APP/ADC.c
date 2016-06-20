@@ -23,7 +23,7 @@ void ADC_Configuration(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1|RCC_APB2Periph_GPIOA , ENABLE);
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
     //GPIO
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1|GPIO_Pin_2|GPIO_Pin_3|GPIO_Pin_5|GPIO_Pin_6|GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5|GPIO_Pin_6|GPIO_Pin_7;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -58,19 +58,14 @@ void ADC_Configuration(void)
     ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;//ADC转换工作在连续模式
     ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;//由软件控制转换
     ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;//转换数据右对齐
-    ADC_InitStructure.ADC_NbrOfChannel = 6;//转换通道个数
+    ADC_InitStructure.ADC_NbrOfChannel = 3;//转换通道个数
     ADC_Init(ADC1, &ADC_InitStructure); //初始化ADC1
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
 
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_5, 1, ADC_SampleTime_13Cycles5);//ADC1选择信道5.等级1，采样时间
 
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 3, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_6, 2, ADC_SampleTime_13Cycles5);//ADC1选择信道6.等级1，采样时间
 
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_5, 4, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
-
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_6, 5, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
-
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_7, 6, ADC_SampleTime_13Cycles5);//ADC1选择信道4.等级1，采样时间
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_7, 3, ADC_SampleTime_13Cycles5);//ADC1选择信道7.等级1，采样时间
 
     ADC_DMACmd(ADC1, ENABLE);//使能ADC1模块DMA
     ADC_Cmd(ADC1, ENABLE);//使能ADC1
