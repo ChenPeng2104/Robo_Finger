@@ -1,0 +1,276 @@
+
+#include "include.h"
+
+void BSP_Task(void*pvParameters);
+void Play_Game_2(void*pvParameters);
+void Play_Game_3(void*pvParameters);
+//void Dynamixel_Set_Task(void*pvParameters);
+//void Function_Control(void*pvParameters);
+
+u8 Action_Function =4;
+u8 Function_Select = 100;
+u16 Delay_Time_Set = 100;   //单位 ms
+
+int main(void )
+{
+    xTaskCreate(BSP_Task,"BSP_Init",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY, NULL);
+    vTaskStartScheduler(); //启动调服器，任务开始执行
+    return 0;
+}
+#define Function_Num 20
+u8 Finish_Flag[Function_Num];
+void Function_Control(void*pvParameters)
+{
+    xTaskHandle current_Task;
+    static u8 pre_n =0;
+    int RecCMD;
+    while(1)
+    {
+        if(Action_Function<Function_Num && Finish_Flag[Action_Function]==1)
+        {
+            switch(Action_Function)
+            {
+            case 1:
+                Finish_Flag[1] =0;
+                xTaskCreate(GrabCup,"GrabCup",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 2:
+                Finish_Flag[2] =0;
+                xTaskCreate(Single_Finger,"Single_Finger",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 3:
+                Finish_Flag[3] =0;
+                xTaskCreate(Three_Finger, "Three_Finger",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 4:
+                Finish_Flag[4] =0;
+                xTaskCreate(Hand_Reset,"reset_hand",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 5:
+                Finish_Flag[5] =0;
+                xTaskCreate(Hand_Open,"open_hand",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 6:
+                Finish_Flag[6] =0;
+                xTaskCreate(FastReset,"FastReset",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 7:
+                Finish_Flag[7] =0;
+                xTaskCreate(Vertical_Hold,"Vertical_Hold",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            case 8:
+                Finish_Flag[8] =0;
+                xTaskCreate(Clamp_Card,"Clamp_Card",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+						case 9:
+                Finish_Flag[9] =0;
+                xTaskCreate(Stone_Gesture,"Stone_Gesture",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+						case 10:
+                Finish_Flag[10] =0;
+                xTaskCreate(Scissors_Gesture,"Scissors_Gesture",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+						case 11:
+                Finish_Flag[11] =0;
+                xTaskCreate(Cloth_Gesture,"Cloth_Gesture",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+2, &current_Task);
+                break;
+            default:
+                ;
+            }
+            if(Action_Function!=0)
+                pre_n = Action_Function;
+            Action_Function =0;
+        }//end if
+        else if(Action_Function==255)//删除任务
+        {
+            if(Finish_Flag[pre_n]==0)
+            {
+                vTaskDelete( current_Task );
+                Finish_Flag[pre_n]=1;
+                Action_Function =4;
+            }
+        }
+        vTaskDelay(400);//Delay 10ms
+        RecCMD = Detect_CMD();
+        if( RecCMD !=(-1))
+        {
+            switch(RecCMD)
+            {
+            case -1:
+                Action_Function=0;
+                break;
+            case 1:	//Open hand
+                Action_Function=5;
+                break;
+            case 2: //Grab Cup
+                Action_Function=1;
+                break;		
+						case 3:	//Fast reset
+                Action_Function=6;
+                break;
+            case 4:	//reset
+                Action_Function=4;
+                break;
+						case 5:	//Stone
+                Action_Function=9;
+                break;
+						case 6:	//Scissors
+                Action_Function=10;
+                break;
+						case 7: //Cloth
+                Action_Function=11;
+                break;
+						case 8: //Single Finger
+                Action_Function=2;
+                break;
+            default:
+                Action_Function=0;
+            }
+        }
+    }
+}
+Dynamixel_Structure *Respond_Dynl;
+static NameType reg;
+static u16 length,extracting[10];
+float ADC_ConvertedValueLocal[6];
+float gPos;
+static u16 status;
+void Dynamixel_Set_Task(void*pvParameters)
+{
+    u8 i;
+    Dynamixel_Structure *respond;
+    while(1)
+    {
+        switch(Function_Select)
+        {
+        case 0://等待并接收信息
+            respond = Receive_Data(Goal.Channel);
+            if(respond != NULL)
+                Respond_Dynl = respond;
+            break;
+        case 1://读取某个舵机的状态信息
+            status = ReadData(Goal.ID,reg);
+            break;
+        case 2://设置某个舵机的ID
+            DataOPE(Goal.ID,WRITE_DATA,Id,Goal.New_ID);
+            break;
+        case 3://恢复某个舵机的出厂设置
+            DataOPE(Goal.ID,FACTORY_RESET,(NameType)NULL,NULL);
+            break;
+        case 4://同时 更改 angle 和 Speed以及Torque_Limit
+            Set_Goal_Value(Goal.ID,Goal.Position,Goal.Speed);
+            break;
+        case 5://设置某个舵机的波特率
+            Set_Baud_Rate(Goal.ID,Goal.Baud);
+            break;
+        case 6://设置某个舵机的返回模式	//0-none 1-read 2-all
+            Set_Return_Level(Goal.ID,Goal.Return_Level);
+            break;
+        case 7://PING指令 确认通信链接成功
+
+            //PING_CMD(Goal.ID,Goal.Channel);
+        {
+            ReadDataS(Goal.ID,reg,length,extracting);
+            break;
+        }
+        case 8://亮灯
+            Set_XL_LED(Goal.ID,Goal.LED);
+            break;
+        case 9://灭灯
+            Set_XL_LED(Goal.ID,(LED_Type)0x00);
+            break;
+        case 10://设置工作模式 //1-joint  2-Wheel 3-Torque
+            DataOPE(Goal.ID,WRITE_DATA,control_mode,Goal.Work_Mode);
+            break;
+        case 11:
+            status = DataOPE(Goal.ID,PING,(NameType)NULL,NULL);
+            break;
+        case 13:
+            DataOPE(Goal.ID,REG_WRITE,goal_position,Goal.Position);
+            break;
+        case 14://Action指令
+            DataOPE(Goal.ID,ACTION,(NameType)NULL,NULL);
+            break;
+        case 15:
+            Hand_Open(&i);
+        case 16://Action指令
+            DataOPE(Goal.ID,WRITE_DATA,return_delaytime,Goal.Channel);
+            break;
+        default:
+            ;
+
+        }
+        Function_Select = 100;
+        vTaskDelay(500);//Delay 10ms
+//		for(i=0;i<6;i++)
+//				ADC_ConvertedValueLocal[i] = ((float)ADC_ConvertedValue[i])/4096*3.3;
+
+    }
+//	vTaskDelete( NULL );
+}
+
+void LED_Configuration(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6|GPIO_Pin_7|GPIO_Pin_8;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    GPIO_ResetBits(GPIOB, GPIO_Pin_7|GPIO_Pin_6|GPIO_Pin_8);
+
+}
+void RNG_Configuration(void)
+{
+//    RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG,ENABLE);
+//    RNG_Cmd(ENABLE);
+
+}
+void Value_Reset(void)
+{
+    u8 i=0;
+    for(i=0; i<Function_Num; i++)
+        Finish_Flag[i]=1;
+
+}
+void BSP_Init(void)
+{
+    SystemInit();                //RCC Configuration
+    USART_TTL_Init(57600);     //the ISART3 for TTL finger to Configuration
+		USART2_Init(57600);
+    LED_Configuration();
+//    RNG_Configuration();
+//   ADC_Configuration();
+    Value_Reset();
+    vTaskDelay(15000);
+}
+
+void BSP_Task(void*pvParameters)
+{
+    BSP_Init();
+
+    //creat Task
+    xTaskCreate(Dynamixel_Set_Task,"Dynamixel_Set",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY+1, NULL);
+
+    xTaskCreate(Function_Control,"Function",configMINIMAL_STACK_SIZE,NULL,tskIDLE_PRIORITY, NULL);
+
+    vTaskDelete( NULL );
+}
+
+
+void vApplicationMallocFailedHook(void)
+{
+}
+void vApplicationIdleHook(void)
+{
+
+}
+void vApplicationStackOverflowHook(void)
+{
+}
+void vApplicationTickHook(void)
+{
+}
+

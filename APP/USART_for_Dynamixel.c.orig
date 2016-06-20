@@ -1,0 +1,485 @@
+/**
+  ******************************************************************************
+  * @file    USART.C
+  * @author  Luzian
+  * @version V1.0.0          modified by Keil for MDK-ARM V5.0
+  * @date    27-Dezenmber-2015
+  * @brief   USART for 485 configuration
+	******************************************************************************
+**/
+
+#include "USART_for_Dynamixel.h"
+
+//本文件的内部函数声明
+//485
+void Send_Array(uint8_t * Array, uint16_t Len);
+Dynamixel_Structure *Receive_Data_485(void);
+//TTL
+void Send_Array_TTL(u8 * Array, u16 Len);
+u16 update_crc(u16 crc_accum,u8 *data_blk_ptr,u16 data_blk_size);
+Dynamixel_Structure *Receive_Data_TTL(void);
+Dynamixel_Structure *Receive_Cmd_TTL(void);
+
+/**************************************************************/
+/** @name   USART2_IRQHandler(void)
+  * @brief  USART2 接收中断函数
+            将接收的字节存入Receive_Que队列里
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+QUE_Struct Receive_Que = { 0,0,{0}}; //485接收的缓冲Buff队列 内部使用
+
+void USART2_IRQHandler(void)
+{
+    if(USART_GetFlagStatus(USART2 , USART_FLAG_RXNE) != RESET)
+    {
+        //read the data ,and also clear the RXNE flag
+        Receive_Que.Data[Receive_Que.rear] = USART_ReceiveData(USART2);
+        Receive_Que.rear = (++Receive_Que.rear)%100;
+    }
+
+}
+/**************************************************************/
+/** @name   Receive_Data(void)
+  * @brief  从接收队列里寻找一组符合Dynamixel协议的数据并返回
+            将接收的字节存入Receive_Que队列里
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+
+Dynamixel_Structure *Receive_Data(u8 style)
+{
+
+    switch(style)
+    {
+    case MX_485:
+        return Receive_Data_485();
+
+    case XL_TTL:
+        return Receive_Data_TTL();
+		case 3:
+			return Receive_Cmd_TTL();
+
+    default:
+        return Receive_Data_485();
+    }
+//	return NULL;
+}
+Dynamixel_Structure *Receive_Data_485(void)
+{
+    static Dynamixel_Structure receive_dynl;
+    u8 i =0;
+
+    //将队列头指向一帧数据的开始
+    while( Receive_Que.front != Receive_Que.rear)
+    {
+        if(Receive_Que.Data[Receive_Que.front] == 0xff)
+            break;
+        else
+            Receive_Que.front= (++Receive_Que.front)%100;
+    }
+
+    if( (100+Receive_Que.rear-Receive_Que.front)%100>5  )
+    {
+        if(Receive_Que.Data[(Receive_Que.front+1)%100]==0xff)   //正常数据的开头，检测到两个0XFF,但不一定传输完一帧
+        {
+            //确认完整的接收完一数据包(暂时不检查是否传输数据有错)
+            if( ( (100+Receive_Que.rear-Receive_Que.front)%100 - 3) >= Receive_Que.Data[(Receive_Que.front+3)%100] )
+            {
+                receive_dynl.ID = Receive_Que.Data[(Receive_Que.front+2)%100];
+                receive_dynl.Len =  Receive_Que.Data[(Receive_Que.front+3)%100];
+                receive_dynl.Insruction = Receive_Que.Data[(Receive_Que.front+4)%100];
+                for(i=0; i<receive_dynl.Len-2; i++)
+                {
+                    receive_dynl.Data[i]=Receive_Que.Data[(Receive_Que.front+5+i)%100];
+                }
+                receive_dynl.Check_sum = Receive_Que.Data[(Receive_Que.front+receive_dynl.Len+3)%100];
+
+                Receive_Que.front = (Receive_Que.front+receive_dynl.Len+4)%100;
+                return &receive_dynl;
+            }
+            else
+                return NULL;
+        }
+        else  //虽然检测到OXFF。但是并不是两个,跳过
+        {
+            Receive_Que.front =  (Receive_Que.front+1)%100;
+            return NULL;
+        }
+
+    }
+    else
+        return NULL;
+
+}
+
+/**
+  ******************************************************************************
+  * @name  Send_Data_485(Dynamixel_Structure data)
+
+  * @brief  以485通信发送数据  （按Dynamixel的通信协议）
+          ** 通信协议为 " 0xff 0xff ID LEN  Instruction Data[0] Data[1]...Data[n]  Check_sum "
+
+                          0xff 0xff    起始字符
+                          ID           某个舵机的ID号
+                          LEN          数据长度 = Data+2
+                          Instruction  指令
+                          Data[0]      操作的起始地址
+                          Data[x]      数据x(读操作时表示将要读出多少个字符 写操作时表示写入的字符)
+                          check_sum    校验字符 = ~(Len+ID+Instruction+ Data[0]+...+Data[n]+Check_sum) 和的补码
+
+  * @param  输入参数 data : 要发送给某个Dynamixel舵机的参数(结构体请在头文件查看)
+
+  * @retval 输出参数 None
+  *
+	******************************************************************************
+**/
+void Send_Data_485(Dynamixel_Structure data)
+{
+    u8 send_buff[35];
+    u16 i=0;
+    int sum = 0;
+    send_buff[0] = 0xff;
+    send_buff[1] = 0xff;
+    send_buff[2] = data.ID;
+    send_buff[3] = data.Len +2;
+    send_buff[4] = data.Insruction;
+    for(; i<data.Len; i++)
+    {
+        send_buff[5+i] = data.Data[i];
+        sum +=data.Data[i];
+    }
+    send_buff[5+i] = ~(u8)(data.ID+data.Insruction+sum+data.Len+2);
+
+    Send_Array(send_buff, send_buff[3]+4);
+}
+/**************************************************************/
+/**
+  * @brief  发参数  内部调用
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+void Send_Array(u8 * Array, u16 Len)
+{
+    u16 i = 0;
+    u8 temp = 0;
+    GPIO_SetBits(GPIOB,GPIO_Pin_2);	    //发送端使能
+    USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);  // 关闭接收中断
+    for (; i < Len; i++)
+    {
+        temp = *Array++;
+
+        USART_SendData(USART2, temp);
+        while (USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET);
+    }
+    USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);  // 打开接收中断
+    USART_ClearFlag(USART2, USART_FLAG_TC|USART_FLAG_RXNE);
+    GPIO_ResetBits(GPIOB,GPIO_Pin_2);	//发送端失能 = 接收失能
+}
+
+
+/*________________________________________________以下的为TTL信号的舵机________________________________________________*/
+
+/**************************************************************/
+/** @name   USART_TTL_Init(int baud_rate)
+  * @brief  USART3初始化   开接收中断 PB10-TX PB11-RX
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+void USART_TTL_Init(int baud_rate)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    USART_InitTypeDef USART_InitStructure;
+    NVIC_InitTypeDef NVIC_InitStructure;
+    /* config USART2 clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1 |RCC_APB2Periph_GPIOA, ENABLE);
+    //Enable GPIO
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA,&GPIO_InitStructure);
+
+    GPIO_ResetBits(GPIOA,GPIO_Pin_12);
+    /* USART2 GPIO config */
+    /* Configure USART1 Rx (PA10) as input  */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    /* Configure USART1 Tx (PA9) as alternate function push-pull */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+
+    /* Configure the NVIC Preemption Priority Bits */
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
+    /* Enable the USARTy Interrupt */
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+    /* USART2 mode config */
+    USART_InitStructure.USART_BaudRate = baud_rate;
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+    USART_InitStructure.USART_StopBits = USART_StopBits_1;
+    USART_InitStructure.USART_Parity = USART_Parity_No ;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+    USART_Init(USART1, &USART_InitStructure);
+//	USART1->CR3|=1<<3;//HDSEL = 1,选择半双工模式
+//	USART1->CR2&=~(1<<14);//LINEN = 0
+//	USART1->CR2&=~(1<<11);//CLKEN = 0
+//	USART1->CR3&=~(1<<5);//SCEN = 0
+//	USART1->CR3&=~(1<<1);//IREN = 0
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);  //开接收中断
+
+    USART_Cmd(USART1, ENABLE);
+//    USART_ClearFlag(USART1, USART_FLAG_TC);
+//     USART_ClearFlag(USART1, USART_FLAG_RXNE);
+}
+
+/**************************************************************/
+/** @name   USART3_IRQHandler(void)
+  * @brief  USART3 接收中断函数
+            将接收的字节存入Receive_Que_TTL队列里
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+QUE_Struct Receive_Que_TTL = { 0,0,{0}}; //485接收的缓冲Buff队列 内部使用
+
+void USART1_IRQHandler(void)
+{
+    if(USART_GetFlagStatus(USART1 , USART_FLAG_RXNE) != RESET)
+    {
+        //read the data ,and also clear the RXNE flag
+        Receive_Que_TTL.Data[Receive_Que_TTL.rear] = USART_ReceiveData(USART1);
+        Receive_Que_TTL.rear = (++Receive_Que_TTL.rear)%100;
+    }
+}
+
+/**************************************************************/
+/** @name   Receive_Data(void)
+  * @brief  从接收队列里寻找一组符合Dynamixel协议的数据并返回
+            将接收的字节存入Receive_Que队列里
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+
+Dynamixel_Structure *Receive_Data_TTL(void)
+{
+    static Dynamixel_Structure receive_TTL_dynl;
+    u8 i =0;
+
+    //将队列头指向一帧数据的开始
+    while( Receive_Que_TTL.front != Receive_Que_TTL.rear)
+    {
+        if(Receive_Que_TTL.Data[Receive_Que_TTL.front] == 0xff)
+            break;
+        else
+            Receive_Que_TTL.front= (++Receive_Que_TTL.front)%100;
+    }
+
+    if( (100+Receive_Que_TTL.rear-Receive_Que_TTL.front)%100>10  )
+    {
+        if( (Receive_Que_TTL.Data[(Receive_Que_TTL.front+1)%100]==0xff)
+                &&( Receive_Que_TTL.Data[(Receive_Que_TTL.front+2)%100]==0xfd ) )   //正常数据的开头，检测到两个0XFF,和0xfd 但不一定传输完一帧
+        {
+            //确认完整的接收完一数据包(暂时不检查是否传输数据有错)
+            if( ( (100+Receive_Que_TTL.rear-Receive_Que_TTL.front)%100 - 5) >=
+                    ( Receive_Que_TTL.Data[(Receive_Que_TTL.front+5)%100]+ (Receive_Que_TTL.Data[(Receive_Que_TTL.front+6)%100]<<8) ) )
+            {
+                receive_TTL_dynl.ID = Receive_Que_TTL.Data[(Receive_Que_TTL.front+4)%100];
+                receive_TTL_dynl.Len =  Receive_Que_TTL.Data[(Receive_Que_TTL.front+5)%100]+(Receive_Que_TTL.Data[(Receive_Que_TTL.front+6)%100]<<8);
+                receive_TTL_dynl.Insruction = Receive_Que_TTL.Data[(Receive_Que_TTL.front+8)%100];   //*注意 此处跳过2.0协议中的INS位，提取的为Error信息
+                for(i=0; i<receive_TTL_dynl.Len-4; i++)
+                {
+                    receive_TTL_dynl.Data[i]=Receive_Que_TTL.Data[(Receive_Que_TTL.front+9+i)%100];
+                }
+                receive_TTL_dynl.Check_sum = Receive_Que_TTL.Data[(Receive_Que_TTL.front+receive_TTL_dynl.Len+5)%100];
+
+                Receive_Que_TTL.front = (Receive_Que_TTL.front+receive_TTL_dynl.Len+7)%100;
+                return &receive_TTL_dynl;
+            }
+            else
+                return NULL;
+        }
+        else  //虽然检测到OXFF。但是并不是 0XFF 0XFF 0XFD 所以跳过
+        {
+            Receive_Que_TTL.front =  (Receive_Que_TTL.front+1)%100;
+            return NULL;
+        }
+
+    }
+    else
+        return NULL;
+
+}
+
+
+Dynamixel_Structure *Receive_Cmd_TTL(void)
+{
+    static Dynamixel_Structure receive_TTL_dynl;
+    u8 i =0;
+
+    //将队列头指向一帧数据的开始
+    while( Receive_Que_TTL.front != Receive_Que_TTL.rear)
+    {
+        if(Receive_Que_TTL.Data[Receive_Que_TTL.front] == 0xff)
+            break;
+        else
+            Receive_Que_TTL.front= (++Receive_Que_TTL.front)%100;
+    }
+
+    if( (100+Receive_Que_TTL.rear-Receive_Que_TTL.front)%100>5  )
+    {
+        if( ((Receive_Que_TTL.Data[(Receive_Que_TTL.front+1)%100])==0xff)&&(Receive_Que_TTL.Data[(Receive_Que_TTL.front+2)%100]==250))    //正常数据的开头，检测到两个0XFF,和0xfd  判断第三个是否是250
+        {
+            //确认完整的接收完一数据包(暂时不检查是否传输数据有错)
+								Receive_Que_TTL.Data[(Receive_Que_TTL.front+2)%100]=250;
+                receive_TTL_dynl.ID = Receive_Que_TTL.Data[(Receive_Que_TTL.front+2)%100];   	//ID
+                receive_TTL_dynl.Len =  Receive_Que_TTL.Data[(Receive_Que_TTL.front+3)%100];	//长度字节
+                for(i=0; i<receive_TTL_dynl.Len; i++)
+                {
+                    receive_TTL_dynl.Data[i]=Receive_Que_TTL.Data[(Receive_Que_TTL.front+4+i)%100];
+                }
+                Receive_Que_TTL.front = (Receive_Que_TTL.front+6)%100;
+                return &receive_TTL_dynl;
+        }
+        else  //虽然检测到OXFF。但是并不是 0XFF 0XFF 0XFD 所以跳过
+        {
+            Receive_Que_TTL.front =  (Receive_Que_TTL.front+1)%100;
+            return NULL;
+        }
+    }
+    else
+        return NULL;
+
+}
+/**
+  ******************************************************************************
+  * @name  Send_Data_TTL(Dynamixel_Structure data)
+
+  * @brief  以TTL电平发送数据  （按Dynamixel的通信协议）
+          ** 通信协议为 " 0xff 0xff 0xfd 0x00  ID LEN_L LEN_H  Instruction Data[0] Data[1]...Data[n]  CRC_L CRC_H "
+
+                          0xff 0xff 0xfd   Header
+                          0x00             Reserved
+                          ID               某个舵机的ID号  0~252  Broadcast id is 254
+                          LEN_L            数据长度 = Data+3
+                          LEN_H
+                          Instruction      指令
+                          Data[0]          操作的起始地址
+                          Data[x]          数据x(读操作时表示将要读出多少个字符 写操作时表示写入的字符)
+                          CRC_L            校验字符 = ~(Len+ID+Instruction+ Data[0]+...+Data[n]+Check_sum) 和的补码
+                          CRC_H
+
+  * @param  输入参数 data : 要发送给某个Dynamixel舵机的参数(结构体请在头文件查看)
+
+  * @retval 输出参数 None
+  *
+	******************************************************************************
+**/
+void Send_Data_TTL(Dynamixel_Structure data)
+{
+    u8 send_buff[35];
+    u16 i=0,crc=0;
+    send_buff[0] = 0xff;
+    send_buff[1] = 0xff;
+    send_buff[2] = 0xfd;
+    send_buff[3] = 0x00;
+    send_buff[4] = data.ID;
+    send_buff[5] = (data.Len +3)&0x00ff;
+    send_buff[6] = ((data.Len +3)>>8)&0x00ff;
+    send_buff[7] = data.Insruction;
+    for(; i<data.Len; i++)
+    {
+        send_buff[8+i] = data.Data[i];
+    }
+    crc = update_crc ( 0, send_buff , 8+data.Len);
+    send_buff[8+data.Len] = crc&0x00ff;
+    send_buff[9+data.Len] = (crc>>8)&0x00ff;
+    Send_Array_TTL(send_buff, data.Len+10);
+}
+/**************************************************************/
+/**
+  * @brief  发参数  内部调用
+  * @param  None
+  * @retval None
+  */
+/**************************************************************/
+void Send_Array_TTL(u8 * Array, u16 Len)
+{
+    u16 i = 0;
+    u8 temp = 0;
+    USART1->CR1 &=~(1<<2); //RE =0;接收失能
+    GPIO_SetBits(GPIOA,GPIO_Pin_12);	  //发送端使能
+
+    USART_GetFlagStatus(USART1, USART_FLAG_TC);
+    for (; i < Len; i++)
+    {
+        temp = *Array++;
+        USART_SendData(USART1, temp);
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
+    }
+
+    GPIO_ResetBits(GPIOA,GPIO_Pin_12);	//发送端失能
+    USART1->CR1 |=(1<<2); //RE =1;接收使能
+}
+
+u16 update_crc(u16 crc_accum,u8 *data_blk_ptr,u16 data_blk_size)
+{
+    u16 i, j;
+    static const u16 crc_table[256] = {
+        0x0000, 0x8005, 0x800F, 0x000A, 0x801B, 0x001E, 0x0014, 0x8011,
+        0x8033, 0x0036, 0x003C, 0x8039, 0x0028, 0x802D, 0x8027, 0x0022,
+        0x8063, 0x0066, 0x006C, 0x8069, 0x0078, 0x807D, 0x8077, 0x0072,
+        0x0050, 0x8055, 0x805F, 0x005A, 0x804B, 0x004E, 0x0044, 0x8041,
+        0x80C3, 0x00C6, 0x00CC, 0x80C9, 0x00D8, 0x80DD, 0x80D7, 0x00D2,
+        0x00F0, 0x80F5, 0x80FF, 0x00FA, 0x80EB, 0x00EE, 0x00E4, 0x80E1,
+        0x00A0, 0x80A5, 0x80AF, 0x00AA, 0x80BB, 0x00BE, 0x00B4, 0x80B1,
+        0x8093, 0x0096, 0x009C, 0x8099, 0x0088, 0x808D, 0x8087, 0x0082,
+        0x8183, 0x0186, 0x018C, 0x8189, 0x0198, 0x819D, 0x8197, 0x0192,
+        0x01B0, 0x81B5, 0x81BF, 0x01BA, 0x81AB, 0x01AE, 0x01A4, 0x81A1,
+        0x01E0, 0x81E5, 0x81EF, 0x01EA, 0x81FB, 0x01FE, 0x01F4, 0x81F1,
+        0x81D3, 0x01D6, 0x01DC, 0x81D9, 0x01C8, 0x81CD, 0x81C7, 0x01C2,
+        0x0140, 0x8145, 0x814F, 0x014A, 0x815B, 0x015E, 0x0154, 0x8151,
+        0x8173, 0x0176, 0x017C, 0x8179, 0x0168, 0x816D, 0x8167, 0x0162,
+        0x8123, 0x0126, 0x012C, 0x8129, 0x0138, 0x813D, 0x8137, 0x0132,
+        0x0110, 0x8115, 0x811F, 0x011A, 0x810B, 0x010E, 0x0104, 0x8101,
+        0x8303, 0x0306, 0x030C, 0x8309, 0x0318, 0x831D, 0x8317, 0x0312,
+        0x0330, 0x8335, 0x833F, 0x033A, 0x832B, 0x032E, 0x0324, 0x8321,
+        0x0360, 0x8365, 0x836F, 0x036A, 0x837B, 0x037E, 0x0374, 0x8371,
+        0x8353, 0x0356, 0x035C, 0x8359, 0x0348, 0x834D, 0x8347, 0x0342,
+        0x03C0, 0x83C5, 0x83CF, 0x03CA, 0x83DB, 0x03DE, 0x03D4, 0x83D1,
+        0x83F3, 0x03F6, 0x03FC, 0x83F9, 0x03E8, 0x83ED, 0x83E7, 0x03E2,
+        0x83A3, 0x03A6, 0x03AC, 0x83A9, 0x03B8, 0x83BD, 0x83B7, 0x03B2,
+        0x0390, 0x8395, 0x839F, 0x039A, 0x838B, 0x038E, 0x0384, 0x8381,
+        0x0280, 0x8285, 0x828F, 0x028A, 0x829B, 0x029E, 0x0294, 0x8291,
+        0x82B3, 0x02B6, 0x02BC, 0x82B9, 0x02A8, 0x82AD, 0x82A7, 0x02A2,
+        0x82E3, 0x02E6, 0x02EC, 0x82E9, 0x02F8, 0x82FD, 0x82F7, 0x02F2,
+        0x02D0, 0x82D5, 0x82DF, 0x02DA, 0x82CB, 0x02CE, 0x02C4, 0x82C1,
+        0x8243, 0x0246, 0x024C, 0x8249, 0x0258, 0x825D, 0x8257, 0x0252,
+        0x0270, 0x8275, 0x827F, 0x027A, 0x826B, 0x026E, 0x0264, 0x8261,
+        0x0220, 0x8225, 0x822F, 0x022A, 0x823B, 0x023E, 0x0234, 0x8231,
+        0x8213, 0x0216, 0x021C, 0x8219, 0x0208, 0x820D, 0x8207, 0x0202
+    };
+
+    for(j = 0; j < data_blk_size; j++)
+    {
+        i = ((unsigned short)(crc_accum >> 8) ^ data_blk_ptr[j]) & 0xFF;
+        crc_accum = (crc_accum << 8) ^ crc_table[i];
+    }
+    return crc_accum;
+}
+
