@@ -1,5 +1,5 @@
 Dependencies for Project 'Demo', Target 'Project_Demo': (DO NOT MODIFY !)
-F (.\APP\main.c)(0x57678F96)(-c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I.\APP -I.\FreeRTOS -I.\RTE -I.\RTE\Device -I.\FreeRTOS\include-I D:\STM32F103CBT6\RTE-I D:\STM32F103CBT6\RTE\Device\STM32F103T8-I C:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\StdPeriph_Driver\inc-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\RTE_Driver-D__UVISION_VERSION="517" -D_RTE_ -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
+F (.\APP\main.c)(0x57689634)(-c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I.\APP -I.\FreeRTOS -I.\RTE -I.\RTE\Device -I.\FreeRTOS\include-I D:\STM32F103CBT6\RTE-I D:\STM32F103CBT6\RTE\Device\STM32F103T8-I C:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\StdPeriph_Driver\inc-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\RTE_Driver-D__UVISION_VERSION="517" -D_RTE_ -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
 I (APP\include.h)(0x56F2128E)
 I (APP\Dynamixel.h)(0x57169E24)
 I (C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include\stm32f10x.h)(0x53BA0D60)
@@ -34,9 +34,9 @@ I (.\FreeRTOS\include\mpu_wrappers.h)(0x56F0CE76)
 I (.\FreeRTOS\include\task.h)(0x56F0CE76)
 I (.\FreeRTOS\include\list.h)(0x56F0CE76)
 I (.\FreeRTOS\include\queue.h)(0x56F0CE76)
-I (APP\ADC.h)(0x57678F96)
-F (.\APP\ADC.c)(0x57678EE7)(-c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I.\APP -I.\FreeRTOS -I.\RTE -I.\RTE\Device -I.\FreeRTOS\include-I D:\STM32F103CBT6\RTE-I D:\STM32F103CBT6\RTE\Device\STM32F103T8-I C:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\StdPeriph_Driver\inc-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\RTE_Driver-D__UVISION_VERSION="517" -D_RTE_ -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o .\objects\adc.o --omf_browse .\objects\adc.crf --depend .\objects\adc.d)
-I (APP\ADC.h)(0x57678F96)
+I (APP\ADC.h)(0x576792B1)
+F (.\APP\ADC.c)(0x576792B1)(-c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I.\APP -I.\FreeRTOS -I.\RTE -I.\RTE\Device -I.\FreeRTOS\include-I D:\STM32F103CBT6\RTE-I D:\STM32F103CBT6\RTE\Device\STM32F103T8-I C:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\StdPeriph_Driver\inc-I C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\RTE_Driver-D__UVISION_VERSION="517" -D_RTE_ -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o .\objects\adc.o --omf_browse .\objects\adc.crf --depend .\objects\adc.d)
+I (APP\ADC.h)(0x576792B1)
 I (C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\1.1.0\Device\Include\stm32f10x.h)(0x53BA0D60)
 I (C:\Keil_v5\ARM\PACK\ARM\CMSIS\4.5.0\CMSIS\Include\core_cm3.h)(0x5625B70C)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x55DB2B80)
