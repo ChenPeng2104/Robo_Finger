@@ -242,7 +242,7 @@ void BSP_Init(void)
 		USART2_Init(57600);
     LED_Configuration();
 //    RNG_Configuration();
-//		ADC_Configuration();
+		ADC_Configuration();
     Value_Reset();
     vTaskDelay(15000);
 }
